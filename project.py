@@ -35,6 +35,22 @@ num_features = 'auto'
 clf_type = 'DT'
 
 class ImageData(object):
+	"""
+	
+	Class for retinal segmentation.
+	
+	PARAMETERS:
+		num_train: int. 
+			Number of training images
+		num_features: int
+			Number of features to used for segmentation. Default: 2
+		clf_type: str
+			Type of classifier to use. Default: KNN
+			
+	RETURN:
+		None
+		
+	"""
 	
 	def __init__(self,
                 dataset,
@@ -71,13 +87,22 @@ class ImageData(object):
 # 		self.axs=0
 		#get image mask to cut out background 		
 		self.mask = False
-		
-	def lineEnds(arr):
-		if (np.sum(arr) == 510):
-			val = arr*2
-		return val		
+			
 		
 	def read_image(self, filename):
+		
+		"""
+		
+		Read image from data folders
+		
+		PARAMETERS:
+			filename: str
+				Name of file
+		RETURN:
+			img_0: np.array
+				Image array
+			
+		"""
 
 		if self.dataset != 'dataset_folder':
 			img_0 = imread(filename)[...,1]
@@ -140,9 +165,22 @@ class ImageData(object):
 
 
 
-	def get_labelled_image(self,
+	def get_segmented_image(self,
 						image,
 						   ):
+		"""
+		
+		Process image and segment it
+		
+		PARAMETERS:
+			image: np.array
+				Image array as a (n, m) array 
+		RETURN:
+			output: np.array
+				Segmented labeled mask of image as a (n, m) array
+			
+		"""
+		
 		if (self.dataset == 'DRIVE'):
 			gaussian_sigma = 2
 			sigmas = (1,1,2)
@@ -211,6 +249,25 @@ class ImageData(object):
 				  image, 
 				  labelled_image,
 				  select_features:list=None):
+		
+	    """
+		
+		Calculate features used for classification
+		
+		PARAMETERS:
+			image: np.array
+				Image array as a (n, m) array 
+			labelled_image: np.array
+				Labeled mask as a (n, m) array 
+			select_features: list
+				Allows for user to pre-select features to use. 			
+		RETURN:
+			feature_arr: np.array
+				Array of features for each segment
+			feature_arr.keys: list
+				Name of features used
+			
+		"""
 	
 	    
 	    feature_names = ['area',
@@ -294,6 +351,25 @@ class ImageData(object):
 					       labelled_image,
 						f,
 						train:bool=False):
+		"""
+		
+		Get ground truth labels from file and calculate accuracy
+		
+		PARAMETERS:
+			labelled_image: np.array
+				Image array as a (n, m) array 
+			f: str
+				filename of ground truth image
+			train: bool
+				whether this is for the training dataset or the test dataset
+		
+		RETURN:
+			img_manual: np.array
+				Ground truth image
+			true_label: list
+				True label of each segment in labelled_image
+			
+		"""
 
 		if self.dataset == 'DRIVE':
 			filename = f.split('\\')[-1]
@@ -353,7 +429,24 @@ class ImageData(object):
 				   title,
 				   axs,
 				   save_img:str=None):
-
+		"""
+		
+		Save images as subplots
+		
+		PARAMETERS:
+			image: np.array
+				Image array as a (n, m) array 
+			title: str
+				title of subplot
+			axs: plt.axs object
+				Axes of subplot			
+			save_img: str
+				whether to save the whole figure. Applied only after plotting the last subplot.
+		
+		RETURN:
+			None.
+			
+		"""			
 		plt.sca(axs)
 		if image.ndim == 2:
 			axs.imshow(image, cmap='gray')
@@ -377,6 +470,19 @@ class ImageData(object):
 
 	def prune_image(self,
 				   image):
+		"""
+		
+		Prune small branches in the blood vessels
+		
+		PARAMETERS:
+			image: np.array
+				Image array as a (n, m) array 
+		
+		RETURN:
+			labelled_image_mask: np.array
+				Pruned image as a (n, m) array 
+			
+		"""			
 		skel = skeletonize(image).astype(np.uint8)			   
 		pruned_skeleton, segmented_img, segment_objects = pcv.morphology.prune(skel_img=skel, size=int(50*self.scale))	
 		footprint = np.ones((int(5*self.scale),int(5*self.scale)))
@@ -387,7 +493,17 @@ class ImageData(object):
 
 	def train_model(self,
 				   ):
-
+		"""
+		
+		Train model
+		
+		PARAMETERS:
+			None.
+		RETURN:
+			classifier: classifier object from sklearn
+				Trained classifier
+			
+		"""	
 		all_features = []
 		all_labels = []	
 		#train SVM classifier	
@@ -442,6 +558,17 @@ class ImageData(object):
 	def evaluate_model(self,
 				   classifier,
 				   ):
+		"""
+		
+		Evaluate model on test data set
+		
+		PARAMETERS:
+			classifier: str
+				classifier used
+		
+		RETURN:
+			None.
+		"""			
 		
 		#evaluate the model
 		print('Running test set...')	
@@ -500,7 +627,23 @@ class ImageData(object):
 	def metrics_score(self, 
 				   true_label,
 						pred_label):
-	
+		"""
+		
+		Calculate the metrics score
+		
+		PARAMETERS:
+			true_label: np.array
+				Image array as a (n,) array 
+			pred_label: str
+				Image array as a (n,) array 
+			train: bool
+				whether this is for the training dataset or the test dataset
+		
+		RETURN:
+			metrics_arr: np.array
+				Calculated scores for the prediction
+			
+		"""	
 		metrics_arr = np.zeros((1, 4))
 		metrics_arr[0, 0] = accuracy_score(true_label, pred_label) 
 		metrics_arr[0, 1] = roc_auc_score(true_label, pred_label)
