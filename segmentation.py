@@ -29,10 +29,6 @@ import matplotlib.backends.backend_pdf
 from sklearn import tree
 from scipy.ndimage import binary_dilation
 
-dataset = 'DRIVE'
-num_train = 5
-num_features = 'auto'
-clf_type = 'DT'
 
 class ImageData(object):
 	"""
@@ -40,6 +36,8 @@ class ImageData(object):
 	Class for retinal segmentation.
 	
 	PARAMETERS:
+		dataset:str.
+  			Dataset name
 		num_train: int. 
 			Number of training images
 		num_features: int
@@ -54,9 +52,9 @@ class ImageData(object):
 	
 	def __init__(self,
                 dataset,
-				num_train,
-				num_features:int=2,
-				clf_type:str='KNN',
+		num_train,
+		num_features:int=2,
+		clf_type:str='KNN',
                 ) -> None:	
 		
 		self.num_features = num_features 
@@ -93,7 +91,7 @@ class ImageData(object):
 		
 		"""
 		
-		Read image from data folders
+		Read image from data folders and binarize
 		
 		PARAMETERS:
 			filename: str
@@ -280,7 +278,7 @@ class ImageData(object):
 							'skel_length',
 							'width',
 							'circularity']
-		
+	    #calculate features		
 	    if np.all(select_features) != None:			
 			   feature_names_selected = [b for a, b in zip(select_features, feature_names) if a]
 			   feature_ind_selected = [n for n, a in enumerate(select_features) if a]
@@ -310,8 +308,6 @@ class ImageData(object):
 				   features[f] = []					   
 				   skel_img = labelled_image.copy()
 				   skel, distance = medial_axis(skel_img, return_distance=True)	
-		
-		   # 
 
 	    num_labels = len(np.unique(labelled_image))
 	
@@ -338,8 +334,9 @@ class ImageData(object):
 	    feature_arr = np.zeros((num_labels-1, len(features.keys())))
 		
 	    for n, f in enumerate(features.keys()):	
-		    feature_arr[:, n] = features[f]			
-		
+		    feature_arr[:, n] = features[f]
+
+	    #scale features			
 	    scaler = StandardScaler() 	
 	    scaler.fit(feature_arr)	
 	    feature_arr = scaler.transform(feature_arr)
@@ -509,11 +506,13 @@ class ImageData(object):
 		#train SVM classifier	
 		for n, f in enumerate(self.train_files):	
 			img = self.read_image(f)
+
+			#get segmented image, calculate features
 			label_img = self.get_labelled_image(img)
 			features, feature_names = self.get_features(img, label_img)
 			_, labels = self.get_true_labels(label_img,
-										  f,
-										  train=True)
+							f,
+							train=True)
 
 			all_features.append(features)
 			all_labels.append(labels)
@@ -521,7 +520,8 @@ class ImageData(object):
 	
 		feature_arr = np.concatenate(all_features)
 		label_arr = np.concatenate(all_labels)
-	
+
+		#do feature selection	
 		print('Selecting features...')
 		if self.clf_type == 'SVC':		
 			classifier = SVC()
@@ -538,7 +538,8 @@ class ImageData(object):
  				 n_features_to_select=self.num_features,     
  	            scoring='roc_auc',
  	            )
- 	
+			
+		#train model 	
 		model = model.fit(feature_arr, label_arr,)
 		print(model.get_support())
 		self.feature_list = model.get_support()
@@ -581,24 +582,30 @@ class ImageData(object):
 					
 		for m, f in enumerate(self.test_files):
 			img = self.read_image(f)
+			
+			#get segmented vessel image		
 			labelled_image = self.get_labelled_image(img)
-			feature_arr, _,  = self.get_features(img, labelled_image, 
-										select_features=self.feature_list
-										)
-# 			feature_arr = model.transform(feature_arr)	
+
+			#calculate features for each segmented vessel
+			feature_arr, _,  = self.get_features(img, 
+							     labelled_image, 
+							select_features=self.feature_list
+							)
+# 			feature_arr = model.transform(feature_arr)
+
+			#predict which are true vessels are which are noise
 			true_label_img, labels = self.get_true_labels(labelled_image, f)		
-			pred_labels = classifier.predict(feature_arr)
-					
+			pred_labels = classifier.predict(feature_arr)				
 	
 			for n in range(len(pred_labels)):
 			    labelled_image[labelled_image == n+1] = pred_labels[n]
 				
 			true_label_img[self.img_mask == 0] = 0	   		
 
-			self.save_image(labelled_image, 'Before pruning', self.axs[1,1])	
+			self.save_image(labelled_image, 'Before pruning', self.axs[1,1])
+
+			#prune small vessels
 			labelled_image_mask = self.prune_image(labelled_image)
-# 			footprint = np.ones((int(2*self.scale), int(2*self.scale))) 
-# 			labelled_image_mask = binary_dilation(labelled_image_mask, structure=footprint)
 			combined_img = np.zeros(labelled_image_mask.shape+(3,))
 			combined_img[...,0] = true_label_img
 			combined_img[...,1] = labelled_image_mask
@@ -608,7 +615,7 @@ class ImageData(object):
 			
 			self.save_image(labelled_image_mask, 'Prediction', self.axs[1,2], save_img = os.path.join(self.save_dir, filename))			
 
-		#print metrics
+			#print metrics
 			self.score_arr[m, :4] = self.metrics_score(true_label_img.ravel(), labelled_image_mask.ravel())
 			
 			print(m, self.score_arr[m, :])
@@ -625,8 +632,8 @@ class ImageData(object):
 
 
 	def metrics_score(self, 
-				   true_label,
-						pred_label):
+			true_label,
+			pred_label):
 		"""
 		
 		Calculate the metrics score
@@ -656,7 +663,12 @@ class ImageData(object):
 
 if __name__ == '__main__':
 
-# 	for s in ['CHASE']:
+	#set parameters
+	dataset = 'DRIVE'
+	num_train = 5
+	num_features = 'auto'
+	clf_type = 'DT'
+
 	for s in ['KNN', 'SVC', 'DT']:	
 		imgD = ImageData(dataset, num_train, num_features, s)
 		start_time = time.time()
